@@ -1,0 +1,31 @@
+ID,Turno,Observação
+1,Manhã,Máquina parou por falha no motor e aguardando a manutenção
+2,Manhã,Faltou matéria-prima na linha e o abastecimento atrasou
+3,Manhã,Troca de produto e ajuste de parâmetros para o novo lote
+4,Manhã,Peças fora da especificação retornaram para retrabalho
+5,Manhã,Limpeza geral da área antes do almoço
+6,Manhã,Pausa programada para reunião de segurança
+7,Tarde,Sensor com defeito travou a esteira por 20 minutos
+8,Tarde,Aguardando chegada de embalagens do almoxarifado
+9,Tarde,Setup demorou além do previsto e depois houve retrabalho por defeito
+10,Tarde,Organização das ferramentas e limpeza do posto de trabalho
+11,Tarde,Parada para o intervalo coletivo
+12,Tarde,Equipamento quebrou e faltou peça de reposição
+13,Noite,Troca de lote com limpeza completa da máquina
+14,Noite,Refugo alto no início do turno e necessidade de refazer as peças
+15,Noite,Falta de insumo na estação 3
+16,Noite,Pausa programada de manutenção preventiva
+17,Noite,Vazamento de óleo e máquina parada
+18,Noite,Operador organizando o estoque no posto
+19,Manhã,Ajuste da calibração após troca de molde
+20,Manhã,Lote reprovado na inspeção e retrabalhado
+21,Manhã,Esperando liberação de material pelo setor de compras
+22,Tarde,Correia rompida e linha parada
+23,Tarde,Reunião mensal da equipe durante o turno
+24,Tarde,Limpeza do filtro e organização da bancada
+25,Noite,Material entregue em quantidade menor do que o pedido
+26,Noite,Troca de ferramenta e setup para a próxima ordem
+27,Noite,Acabamento com defeito e peças refeitas
+28,Manhã,Queda de energia e equipamento reiniciado
+29,Manhã,Treinamento rápido do operador novo
+30,Manhã,Sem observações relevantes
