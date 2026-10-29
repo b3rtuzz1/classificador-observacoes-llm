@@ -2,7 +2,8 @@
 
 Ferramenta que lê observações em texto livre (planilha `.xlsx`/`.csv`) e as classifica automaticamente em categorias configuráveis usando modelos de linguagem (LLMs), com **saída estruturada em JSON validada**, **processamento em lotes concorrentes**, **fallback em falhas** e **controle de custo em tempo real**.
 
-![Tela do classificador](docs/screenshot.png)
+![Configuração: planilha, categorias e prioridade](docs/screenshot-config.png)
+![Provedor, modelo e estimativa de custo](docs/screenshot-custo.png)
 
 > **Protótipo de validação.** A interface web foi criada para facilitar os testes e a validação da classificação. O uso previsto é a **integração automática ao fluxo de dados**, classificando cada registro assim que ele é lançado no sistema, sem interface. A lógica principal (prompt, validação do JSON, fallback e controle de custo) está em [`src/classifier.js`](src/classifier.js), independente da tela.
 
