@@ -1,0 +1,18 @@
+# Dados: nunca versionar planilhas reais ou de teste da empresa
+*.xlsx
+*.xls
+*.xlsm
+*.ods
+*.csv
+!examples/observacoes_exemplo.csv
+
+# Segredos
+.env
+*.key
+
+# Sistema e editores
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+node_modules/
