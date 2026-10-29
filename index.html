@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="Classificador de observações de produção com LLMs: saída em JSON validada, lotes concorrentes, fallback e controle de custo.">
+<title>Classificador de Observações — Multi-IA (Lotes)</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<link rel="stylesheet" href="src/styles.css">
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <svg viewBox="0 0 16 16"><path d="M8 1.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13zM0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8zm11.78-1.72a.75.75 0 0 1 0 1.06l-3.25 3.25a.75.75 0 0 1-1.06 0L5.72 8.84a.75.75 0 0 1 1.06-1.06L8 8.97l2.72-2.69a.75.75 0 0 1 1.06 0z"/></svg>
+  </div>
+  <h1>Classificador de Observações</h1>
+  <span class="gemini-badge">✦ Multi-IA (Lotes)</span>
+</header>
+
+<main>
+
+  <div class="step" id="step-upload">
+    <div class="step-label">01 — Carregar planilha</div>
+    <div class="drop-zone" id="dropZone">
+      <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" />
+      <span class="drop-icon">📊</span>
+      <h2>Solte a planilha aqui</h2>
+      <p>Formatos aceitos: .xlsx, .xls, .csv</p>
+    </div>
+    <div class="file-info" id="fileInfo">
+      <span class="fi-icon">📊</span>
+      <div>
+        <div class="fi-name" id="fiName"></div>
+        <div class="fi-meta" id="fiMeta"></div>
+      </div>
+      <button class="fi-action" id="btnChangeFile">Trocar arquivo</button>
+    </div>
+  </div>
+
+  <div class="step col-selector" id="step-col">
+    <div class="step-label">02 — Coluna de observações</div>
+    <label style="font-size:13px;color:var(--muted);display:block;margin-bottom:8px;">Selecione a coluna que contém as observações a classificar:</label>
+    <select id="colSelect"></select>
+  </div>
+
+  <div class="step col-selector" id="step-cats">
+    <div class="step-label">03 — Categorias e Contexto</div>
+    <div class="cat-list" id="catList"></div>
+    <button class="btn-add-cat" id="btnAddCat" style="margin-bottom: 1.5rem;">+ adicionar categoria</button>
+
+    <!-- Ordem de prioridade / desempate: usada tanto para orientar o texto
+         do prompt (modelos de chat) quanto para resolver qual categoria vira
+         "principal" quando mais de uma passa do limiar no Jev (ver
+         classifyRowJev). Arraste para reordenar, ou use as setas. -->
+    <div style="margin-bottom:1.5rem;">
+      <label style="font-size:13px;color:var(--text);display:block;margin-bottom:4px;font-weight:500;">Ordem de Prioridade (desempate)</label>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:8px;line-height:1.4;">
+        Quando uma observação envolve mais de uma categoria, a que estiver MAIS ACIMA aqui vira a
+        "principal"; as demais (se aplicável) viram secundárias. Arraste pra reordenar.
+      </p>
+      <div class="priority-list" id="priorityList"></div>
+    </div>
+
+    <div>
+      <label style="font-size:13px;color:var(--text);display:block;margin-bottom:6px;font-weight:500;">Contexto / Instruções Extras (Opcional)</label>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:8px;line-height:1.4;">Seja direto para economizar tokens. Ex: "Ambiente industrial. Focar em quebra de ferramental ou atrasos logísticos." A ordem de prioridade acima já é enviada automaticamente — não precisa repetir regras de desempate aqui.</p>
+      <textarea id="aiContext" rows="2" style="width:100%;max-width:500px;background:var(--surface);border:1px solid var(--border2);color:var(--text);font-family:var(--font);font-size:13px;padding:9px 12px;border-radius:var(--radius);box-shadow:var(--shadow);resize:vertical;" placeholder="Insira o contexto aqui..."></textarea>
+    </div>
+  </div>
+
+  <div class="step col-selector" id="step-api">
+    <div class="step-label">04 — Provedor de IA e Configurações</div>
+
+    <!-- Seletor de provedor: Groq (gratuito), OpenRouter (chat, pago) ou
+         Jev/TypeSafe (modelo de decisão estruturada, pago por input apenas) -->
+    <div class="provider-tabs" id="providerTabs">
+      <div class="provider-tab" data-provider="groq">
+        Groq
+        <small>Gratuito</small>
+      </div>
+      <div class="provider-tab active" data-provider="openrouter">
+        OpenRouter
+        <small>Pago (sua chave, ~US$5/mês)</small>
+      </div>
+      <div class="provider-tab" data-provider="jev">
+        Jev (TypeSafe)
+        <small>Decisão estruturada</small>
+      </div>
+    </div>
+    <!-- Nota explicativa, só exibida quando o provedor Jev está selecionado. -->
+    <div id="jevNote" class="api-hint" style="display:none; margin-top:-6px; margin-bottom:10px;">
+      ℹ️ Jev não é um modelo de chat: para cada observação, ele responde "esta observação envolve a
+      categoria X?" (sim/não + probabilidade) para CADA categoria, em paralelo, numa única chamada por
+      linha. Por isso não há "tamanho de lote" aqui — cada linha é 1 requisição. A saída (tokens de
+      resposta) é gratuita; você só paga pela entrada.
+    </div>
+
+    <div class="model-row">
+      <label>Modelo:</label>
+      <select id="modelSelect" style="max-width:460px;"></select>
+      <div class="model-price-tag" id="modelPriceTag"></div>
+    </div>
+
+    <div class="api-input-wrap">
+      <input type="password" id="apiKey" placeholder="Cole sua chave gsk_..." autocomplete="off" />
+    </div>
+    <p class="api-hint" id="apiHint">
+      Obtenha sua chave gratuitamente em <a href="https://console.groq.com/keys" target="_blank">console.groq.com/keys</a>
+    </p>
+
+    <div class="concurrency-row">
+      <label>Tamanho do Lote:</label>
+      <input type="range" id="batchSize" min="20" max="50" value="30" step="5" />
+      <span id="batchSizeVal">30 linhas/req</span>
+    </div>
+
+    <div class="concurrency-row" style="margin-bottom:15px;">
+      <label>Requisições Simultâneas:</label>
+      <input type="range" id="concurrency" min="1" max="5" value="2" />
+      <span id="concurrencyVal">2 workers</span>
+    </div>
+
+    <div style="margin-bottom:15px;">
+      <button class="btn btn-secondary" id="btnTest" style="font-size:13px;">🔍 Testar chave de API</button>
+      <span id="testResult" style="font-size:13px;margin-left:10px;"></span>
+    </div>
+
+    <!-- Painel de estimativa de custo: recalculado sempre que planilha, modelo,
+         categorias, contexto ou tamanho de lote mudam. Ver calcCostEstimate(). -->
+    <div class="cost-panel">
+      <div class="cost-panel-title">💰 Estimativa de custo (antes de rodar)</div>
+      <div class="cost-grid">
+        <div class="cost-item">
+          <div class="cost-label">Tokens de entrada</div>
+          <div class="cost-value" id="estInputTokens">–</div>
+        </div>
+        <div class="cost-item">
+          <div class="cost-label">Tokens de saída</div>
+          <div class="cost-value" id="estOutputTokens">–</div>
+        </div>
+        <div class="cost-item">
+          <div class="cost-label">Nº de requisições</div>
+          <div class="cost-value" id="estRequests">–</div>
+        </div>
+        <div class="cost-item">
+          <div class="cost-label">Custo estimado</div>
+          <div class="cost-value" id="estCost">–</div>
+        </div>
+      </div>
+      <div class="cost-disclaimer">
+        Estimativa aproximada (baseada no tamanho real do texto das observações). O custo real pode
+        variar ±20% conforme o modelo tokeniza o português. Durante o processamento, o custo real
+        (retornado pela própria API) é acumulado abaixo, em tempo real.
+      </div>
+    </div>
+
+    <!-- Painel de custo em tempo real, preenchido durante o processamento (runQueue). -->
+    <div class="cost-panel" id="liveCostPanel" style="display:none;">
+      <div class="cost-panel-title">📡 Custo real acumulado (ao vivo)</div>
+      <div class="cost-grid">
+        <div class="cost-item">
+          <div class="cost-label">Tokens usados (entrada)</div>
+          <div class="cost-value" id="liveInputTokens">0</div>
+        </div>
+        <div class="cost-item">
+          <div class="cost-label">Tokens usados (saída)</div>
+          <div class="cost-value" id="liveOutputTokens">0</div>
+        </div>
+        <div class="cost-item">
+          <div class="cost-label">Custo acumulado</div>
+          <div class="cost-value live" id="liveCost">US$ 0.0000</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="step col-selector" id="step-run">
+    <div class="step-label">05 — Processar</div>
+    <div class="actions">
+      <button class="btn btn-primary" id="btnRun" disabled>
+        <div class="spinner"></div>
+        <span class="btn-txt">Classificar em Lote</span>
+      </button>
+      <button class="btn btn-danger" id="btnStop" style="display:none;">⏹ Parar</button>
+      <span id="runHint" style="font-size:13px;color:var(--muted)"></span>
+    </div>
+    <div class="progress-bar" id="progressBar"><div class="progress-fill" id="progressFill"></div></div>
+    <div class="progress-text" id="progressText"></div>
+    <div class="note note-warn" id="batchNote"></div>
+    <div class="note note-success" id="successNote"></div>
+
+    <!-- Alerta de disjuntor de segurança: aparece se o processo for parado
+         automaticamente por custo ou taxa de falha acima do esperado. -->
+    <div class="safety-alert" id="safetyAlert"></div>
+
+    <!-- Log detalhado, linha a linha, do que está acontecendo em cada lote:
+         início, sucesso, falha (com o motivo real), fallback para sub-lotes,
+         retentativas etc. Ver função logEvent(). -->
+    <div class="process-log" id="processLog" style="display:none;"></div>
+  </div>
+
+  <hr class="divider" id="divResults">
+
+  <div class="results-section" id="resultsSection">
+    <div class="step-label">Resultados</div>
+    <div class="stats-bar" id="statsBar"></div>
+    <div class="filter-bar">
+      <input type="text" id="searchInput" placeholder="Filtrar resultados..." />
+      <button class="btn btn-secondary" id="btnClearFilter" style="display:none;">✕ limpar filtro</button>
+    </div>
+    <div class="section-header">
+      <h3 id="tableTitle">Todas as linhas</h3>
+      <span id="tableCount"></span>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead id="tableHead"></thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+    </div>
+    <div class="pagination" id="pagination"></div>
+    <div class="export-row">
+      <span>Exportar planilha classificada:</span>
+      <button class="btn btn-secondary" id="btnExportXlsx">📥 Excel (.xlsx)</button>
+      <button class="btn btn-secondary" id="btnExportCsv">📄 CSV</button>
+    </div>
+  </div>
+
+</main>
+
+
+<!-- Ordem importa: os arquivos compartilham o escopo global (sem módulos ES). -->
+<script src="src/config.js"></script>
+<script src="src/providers.js"></script>
+<script src="src/utils.js"></script>
+<script src="src/classifier.js"></script>
+<script src="src/ui.js"></script>
+<script src="src/app.js"></script>
+</body>
+</html>
